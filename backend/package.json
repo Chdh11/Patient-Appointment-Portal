@@ -1,0 +1,23 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Healthcare Appointment System Backend",
+  "main": "src/functions/app.js",
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"No tests yet...\""
+  },
+  "dependencies": {
+    "@azure/functions": "^4.7.2",
+    "@azure/identity": "^4.11.1",
+    "mssql": "^11.0.1",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.x"
+  },
+  "keywords": ["azure", "functions", "healthcare", "appointment"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
