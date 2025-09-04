@@ -148,3 +148,76 @@
 
 
 
+-- ALTER TABLE Patients 
+-- ADD username NVARCHAR(50);
+
+-- ALTER TABLE Patients 
+-- ADD phone NVARCHAR(20);
+
+-- ALTER TABLE Doctors
+-- ADD username NVARCHAR(50),
+--     phone NVARCHAR(20),
+--     license_number NVARCHAR(50),
+--     working_hours_start TIME,
+--     working_hours_end TIME;
+
+-- ALTER TABLE Appointments
+-- ADD day DATE,
+--     time TIME,
+--     notes NVARCHAR(500);
+
+-- ALTER TABLE MedicalRecords
+-- ADD description NVARCHAR(500);
+
+
+
+-- ALTER TABLE Reminders
+-- ADD message NVARCHAR(255);
+
+
+
+
+-- INSERT INTO Patients (name, email, password_hash, username, phone, date_of_birth, gender)
+-- VALUES 
+-- ('John Doe', 'john@example.com', 'hashedpassword1', 'john_doe', '9876543210', '1990-05-12', 'Male'),
+-- ('Jane Smith', 'jane@example.com', 'hashedpassword2', 'jane_smith', '9876543211', '1988-11-23', 'Female'),
+-- ('Chhavi Dhankhar', 'chhavidhankhar07@gmail.com', 'hashedpassword3', 'chhavi_dh', '9991215441', '2002-08-11', 'Female');
+
+-- INSERT INTO Doctors (name, email, password_hash, specialization, username, phone, license_number, working_hours_start, working_hours_end)
+-- VALUES 
+-- ('Dr. Alice', 'alice@example.com', 'hashedpassword4', 'Cardiology', 'dr_alice', '9876500001', 'MD-111', '09:00', '17:00'),
+-- ('Dr. Bob', 'bob@example.com', 'hashedpassword5', 'Pediatrics', 'dr_bob', '9876500002', 'MD-222', '09:00', '17:00'),
+-- ('Dr. Smith', 'dr.smith@hospital.com', 'hashedpassword6', 'Cardiology', 'dr_smith', '9876500003', 'MD-333', '09:00', '17:00'),
+-- ('Dr. Johnson', 'dr.johnson@hospital.com', 'hashedpassword7', 'Orthopedics', 'dr_johnson', '9876500004', 'MD-444', '09:00', '17:00');
+
+-- ALTER TABLE DoctorSchedule
+-- ADD notes NVARCHAR(255);
+
+-- INSERT INTO DoctorSchedule (doctor_id, available_date, start_time, end_time, notes)
+-- VALUES
+-- (7, '2025-09-03', '09:00', '17:00', 'Regular clinic hours'),
+-- (8, '2025-09-03', '09:00', '17:00', 'Regular clinic hours'),
+-- (9, '2025-09-03', '09:00', '17:00', 'Regular clinic hours'),
+-- (10, '2025-09-03', '09:00', '17:00', 'Regular clinic hours'),
+-- (7, '2025-09-04', '09:00', '17:00', 'Extended hours'),
+-- (8, '2025-09-04', '09:00', '17:00', 'Extended hours');
+
+-- INSERT INTO Appointments (patient_id, doctor_id, appointment_date, status, day, time, notes)
+-- VALUES
+-- (4, 7, '2025-09-01 09:30', 'scheduled', '2025-09-01', '09:30', 'Routine checkup'),
+-- (5, 8, '2025-09-02 10:00', 'scheduled', '2025-09-02', '10:00', 'Follow-up'),
+-- (6, 7, '2025-09-03 11:00', 'scheduled', '2025-09-03', '11:00', 'Consultation');
+
+-- INSERT INTO Reminders (appointment_id, reminder_type, sent_at, status, message)
+-- VALUES
+-- (3, 'email', NULL, 'pending', 'Reminder: Your appointment is scheduled for 2025-09-01 09:30'),
+-- (4, 'sms', NULL, 'pending', 'Reminder: Your appointment is scheduled for 2025-09-02 10:00'),
+-- (5, 'email', NULL, 'pending', 'Reminder: Your appointment is scheduled for 2025-09-03 11:00');
+
+-- INSERT INTO MedicalRecords (patient_id, file_name, file_path, uploaded_at, description)
+-- VALUES
+-- (4, 'blood_test.pdf', '/files/john/blood_test.pdf', GETDATE(), 'Blood test results'),
+-- (5, 'xray_image.jpg', '/files/jane/xray_image.jpg', GETDATE(), 'X-ray scan of chest'),
+-- (6, 'mri_scan.pdf', '/files/test/mri_scan.pdf', GETDATE(), 'MRI brain scan');
+
+

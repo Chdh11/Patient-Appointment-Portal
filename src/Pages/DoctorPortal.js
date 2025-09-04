@@ -43,38 +43,41 @@ function DoctorPortalComponent({ onBack }) {
       console.error('Cancellation failed:', error);
     }
   };
-
-  const getFilteredAppointments = (type) => {
-    const today = new Date();
-    let filtered = appointments;
-
+  const getAppointmentDateTime = (a) => {
+  const dayPart = a.day.split('T')[0];         
+  const timePart = a.time.split('T')[1].slice(0,5); 
+  return new Date(`${dayPart}T${timePart}:00`);
+};
+const getFilteredAppointments = (type) => 
+  { 
+    const today = new Date(); 
+    // console.log(today)
+    let filtered = [...appointments]; 
+    // console.log("filtered1",filtered)
     if (type === 'upcoming') {
-      filtered = appointments.filter(a => {
-        const apptDate = new Date(`${a.day}T${a.time}`);
-        const diffDays = (apptDate - today) / (1000 * 60 * 60 * 24);
-        return apptDate >= today && diffDays <= 7;
-      });
-    } else if (type === 'past') {
-      filtered = appointments.filter(a => {
-        const apptDate = new Date(`${a.day}T${a.time}`);
-        const diffDays = (today - apptDate) / (1000 * 60 * 60 * 24);
-        return apptDate < today && diffDays <= 7;
-      });
-    }
-
+    filtered = filtered.filter(a => getAppointmentDateTime(a) >= today);
+  } else if (type === 'past') {
+    filtered = filtered.filter(a => getAppointmentDateTime(a) < today);
+  }
+    
     if (dateFilter) {
-      filtered = filtered.filter(a => a.day === dateFilter);
-    }
-
+    filtered = filtered.filter(a => a.day.split('T')[0] === dateFilter);
+  }
+    
     if (searchTerm) {
-      filtered = filtered.filter(a => 
-        a.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.day.includes(searchTerm)
-      );
-    }
-
-    return filtered.sort((a, b) => new Date(`${a.day}T${a.time}`) - new Date(`${b.day}T${b.time}`));
+    const term = searchTerm.toLowerCase();
+    filtered = filtered.filter(a =>
+      (a.doctor_name && a.doctor_name.toLowerCase().includes(term)) ||
+      (a.day && a.day.includes(term))
+    );
+  }
+    
+    // Sort by datetime
+  filtered.sort((a, b) => getAppointmentDateTime(a) - getAppointmentDateTime(b));
+  return filtered;
+  
   };
+
 
   if (!isAuthenticated) {
     return (
@@ -156,7 +159,7 @@ function DoctorPortalComponent({ onBack }) {
               <div className="flex justify-between items-center">
                 <div>
                   <h1 className="text-3xl font-bold text-gray-800">Doctor Dashboard</h1>
-                  <p className="text-gray-600 mt-1">Welcome back, Dr. {username}</p>
+                  <p className="text-gray-600 mt-1">Welcome back, {username}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-500">Today's Date</p>
@@ -228,8 +231,8 @@ function DoctorPortalComponent({ onBack }) {
                       {todayAppointments.map((appt) => (
                         <div key={appt.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
                           <div>
-                            <p className="font-bold text-gray-800">Patient: {appt.username}</p>
-                            <p className="text-gray-600">{appt.time}</p>
+                            <p className="font-bold text-gray-800">Patient: {appt.patient_name}</p>
+                            <p className="text-gray-600">{appt.time.split('T')[1].slice(0,5)}</p>
                           </div>
                           <span className="bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm font-medium">
                             Scheduled
@@ -247,8 +250,8 @@ function DoctorPortalComponent({ onBack }) {
                   <h3 className="text-lg font-semibold mb-4 text-green-600">Next Week Appointments</h3>
                   {upcomingAppointments.slice(0, 3).map((appt) => (
                     <div key={appt.id} className="border-l-4 border-green-500 bg-green-50 p-3 rounded mb-3">
-                      <p className="font-medium text-gray-800">Patient: {appt.username}</p>
-                      <p className="text-sm text-gray-600">{appt.day} at {appt.time}</p>
+                      <p className="font-medium text-gray-800">Patient: {appt.patient_name}</p>
+                      <p className="text-sm text-gray-600">{appt.day.split('T')[0]} at {appt.time.split('T')[1].slice(0,5)}</p>
                     </div>
                   ))}
                   {upcomingAppointments.length === 0 && (
@@ -260,8 +263,8 @@ function DoctorPortalComponent({ onBack }) {
                   <h3 className="text-lg font-semibold mb-4 text-blue-600">Recent Consultations</h3>
                   {pastAppointments.slice(0, 3).map((appt) => (
                     <div key={appt.id} className="border-l-4 border-blue-500 bg-blue-50 p-3 rounded mb-3">
-                      <p className="font-medium text-gray-800">Patient: {appt.username}</p>
-                      <p className="text-sm text-gray-600">{appt.day} at {appt.time}</p>
+                      <p className="font-medium text-gray-800">Patient: {appt.patient_name}</p>
+                      <p className="text-sm text-gray-600">{appt.day.split('T')[0]} at {appt.time.split('T')[1].slice(0,5)}</p>
                     </div>
                   ))}
                   {pastAppointments.length === 0 && (
@@ -335,15 +338,15 @@ function DoctorPortalComponent({ onBack }) {
                       {upcomingAppointments.map((appt) => (
                         <div key={appt.id} className="flex items-center justify-between p-4 border-l-4 border-green-500 bg-green-50 rounded-lg">
                           <div>
-                            <p className="font-bold text-gray-800">Patient: {appt.username}</p>
+                            <p className="font-bold text-gray-800">Patient: {appt.patient_name}</p>
                             <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                               <span className="flex items-center space-x-1">
                                 <Calendar size={14} />
-                                <span>{appt.day}</span>
+                                <span>{appt.day.split('T')[0]}</span>
                               </span>
                               <span className="flex items-center space-x-1">
                                 <Clock size={14} />
-                                <span>{appt.time}</span>
+                                <span>{appt.time.split('T')[1].slice(0,5)}</span>
                               </span>
                             </div>
                           </div>
@@ -375,15 +378,15 @@ function DoctorPortalComponent({ onBack }) {
                     <div className="space-y-4">
                       {pastAppointments.map((appt) => (
                         <div key={appt.id} className="p-4 border-l-4 border-blue-500 bg-blue-50 rounded-lg">
-                          <p className="font-bold text-gray-800">Patient: {appt.username}</p>
+                          <p className="font-bold text-gray-800">Patient: {appt.patient_name}</p>
                           <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                             <span className="flex items-center space-x-1">
                               <Calendar size={14} />
-                              <span>{appt.day}</span>
+                              <span>{appt.day.split('T')[0]}</span>
                             </span>
                             <span className="flex items-center space-x-1">
                               <Clock size={14} />
-                              <span>{appt.time}</span>
+                              <span>{appt.time.split('T')[1].slice(0,5)}</span>
                             </span>
                           </div>
                         </div>
@@ -421,7 +424,7 @@ function DoctorPortalComponent({ onBack }) {
                           <div key={index} className="flex items-center justify-between p-6 border rounded-xl hover:bg-gray-50 transition-colors">
                             <div className="flex items-center space-x-4">
                               <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-                                {patientName.charAt(0).toUpperCase()}
+                                {patientName}
                               </div>
                               <div>
                                 <p className="font-bold text-gray-800 text-lg">{patientName}</p>

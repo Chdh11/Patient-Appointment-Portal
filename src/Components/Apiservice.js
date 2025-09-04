@@ -1,199 +1,260 @@
 // Replace your current Apiservice.js with this updated version
+import bcrypt from 'bcryptjs';
 
 const API_BASE_URL = 'appointment-function-app-hfbuc2hwbbbrfshd.southeastasia-01.azurewebsites.net/api';
-// Replace 'your-function-app-name' with your actual Azure Function App name
+const FUNCTION_APP_KEY=process.env.REACT_APP_FUNCTION_APP_KEY
+
 
 const apiService = {
-  async getAppointments(userId, userType) {
+  // Register a patient
+  async registerPatient(data){
     try {
-      // First try to get from backend
-      const response = await fetch(`${API_BASE_URL}/appointments?username=${encodeURIComponent(userId)}&userType=${encodeURIComponent(userType)}`, {
+      const response = await fetch(`https://${API_BASE_URL}/patients`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          'x-functions-key': FUNCTION_APP_KEY,
+        },
+        body: JSON.stringify({
+          name: `${data.firstName} ${data.lastName}`,
+          email: data.email,
+          password_hash: data.password, // Ideally hash this before sending
+          username: data.username,
+          phone: data.phone,
+          date_of_birth: data.dateOfBirth,
+          gender: data.gender || null
+        })
+      });
+
+      const result = await response.json();
+      console.log(result)
+      return result; // { success: true/false, message?, data? }
+    } catch (error) {
+      console.error("Registration error:", error);
+      return { success: false, message: "Failed to register. Please try again." };
+    }
+  },
+
+  //login patients with username and password
+  async loginPatient(username, password) {
+    try {
+      const response = await fetch(`https://${API_BASE_URL}/patients`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'x-functions-key': FUNCTION_APP_KEY,
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        return Array.isArray(data) ? data : [];
+      const result = await response.json();
+      console.log('API Response:', result);
+      
+      if (!result.success) {
+        return { success: false, message: "Failed to fetch users" };
       }
 
-      // Fallback to localStorage if backend fails
-      console.warn('Backend failed, using localStorage');
-      const stored = JSON.parse(window.localStorage?.getItem("appointments")) || [];
-      if (userType === 'doctor') {
-        return stored;
+      const user = result.data.find(async (u) => {
+      if (u.username === username) {
+        return await bcrypt.compare(password, u.password_hash);
+      }});
+
+      if (user) {
+        return { success: true, userData: user };
       } else {
-        return stored.filter(a => a.username === userId);
+        return { success: false, message: "Invalid username or password" };
       }
     } catch (error) {
-      console.error('API Error:', error);
-      // Fallback to localStorage
-      const stored = JSON.parse(window.localStorage?.getItem("appointments")) || [];
-      if (userType === 'doctor') {
-        return stored;
-      } else {
-        return stored.filter(a => a.username === userId);
-      }
+      console.error("Login error:", error);
+      return { success: false, message: "Failed to login. Please try again." };
     }
   },
-  
+  async getDoctors() {
+  try {
+    const response = await fetch(`https://${API_BASE_URL}/doctors`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-functions-key': FUNCTION_APP_KEY,
+      },
+    });
+
+    const result = await response.json();
+    console.log('Doctors Response:', result);
+    return result.success ? result.data : [];
+  } catch (error) {
+    console.error('Error fetching doctors:', error);
+    return [];
+  }
+},
+
+  async getAppointments(username, userType = 'patient') {
+  try {
+    const response = await fetch(
+      `https://${API_BASE_URL}/appointments?username=${encodeURIComponent(username)}&userType=${encodeURIComponent(userType)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-functions-key': FUNCTION_APP_KEY,
+        },
+      }
+    );
+
+    const result = await response.json();
+    console.log('Appointments Response:', result);
+    return Array.isArray(result) ? result : [];
+  } catch (error) {
+    console.error('Error fetching appointments:', error);
+    return [];
+  }
+},
+// Get all appointments (for slot checking)
+async getAllAppointments() {
+  try {
+    const response = await fetch(`https://${API_BASE_URL}/appointments`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-functions-key': FUNCTION_APP_KEY,
+      },
+    });
+    const result = await response.json();
+    console.log('All Appointments:', result);
+    return result; // full array
+  } catch (error) {
+    console.error('Error fetching all appointments:', error);
+    return [];
+  }
+},
+
+
+  // Create Appointment
   async createAppointment(appointmentData) {
     try {
-      // Try backend first
-      const response = await fetch(`${API_BASE_URL}/appointments`, {
+      const response = await fetch(`https://${API_BASE_URL}/appointments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-functions-key': FUNCTION_APP_KEY,
         },
-        body: JSON.stringify(appointmentData)
+        body: JSON.stringify(appointmentData),
       });
 
-      if (response.ok) {
-        const newAppointment = await response.json();
-        return newAppointment;
-      }
-
-      // Fallback to localStorage
-      console.warn('Backend failed, using localStorage');
-      const stored = JSON.parse(window.localStorage?.getItem("appointments")) || [];
-      const newAppointment = { 
-        ...appointmentData, 
-        id: Date.now(),
-        createdAt: new Date().toISOString(),
-        status: 'scheduled'
-      };
-      const updated = [...stored, newAppointment];
-      window.localStorage?.setItem("appointments", JSON.stringify(updated));
-      return newAppointment;
+      const result = await response.json();
+      console.log('Create Appointment Response:', result);
+      return result;
     } catch (error) {
-      console.error('Failed to create appointment:', error);
-      
-      // Fallback to localStorage
-      const stored = JSON.parse(window.localStorage?.getItem("appointments")) || [];
-      const newAppointment = { 
-        ...appointmentData, 
-        id: Date.now(),
-        createdAt: new Date().toISOString(),
-        status: 'scheduled'
-      };
-      const updated = [...stored, newAppointment];
-      window.localStorage?.setItem("appointments", JSON.stringify(updated));
-      return newAppointment;
+      console.error('Error creating appointment:', error);
+      return { success: false, message: 'Failed to create appointment.' };
     }
   },
-  
+
+  // Cancel Appointment
   async cancelAppointment(appointmentId) {
     try {
-      // Try backend first
-      const response = await fetch(`${API_BASE_URL}/appointments/${appointmentId}`, {
+      const response = await fetch(`https://${API_BASE_URL}/appointments/${appointmentId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
+          'x-functions-key': FUNCTION_APP_KEY,
         },
       });
 
-      if (response.ok) {
-        return true;
-      }
-
-      // Fallback to localStorage
-      console.warn('Backend failed, using localStorage');
-      const stored = JSON.parse(window.localStorage?.getItem("appointments")) || [];
-      const updated = stored.filter(a => a.id !== appointmentId);
-      window.localStorage?.setItem("appointments", JSON.stringify(updated));
-      return true;
+      const result = await response.json();
+      console.log('Cancel Appointment Response:', result);
+      return result.success;
     } catch (error) {
-      console.error('Failed to cancel appointment:', error);
-      
-      // Fallback to localStorage
-      const stored = JSON.parse(window.localStorage?.getItem("appointments")) || [];
-      const updated = stored.filter(a => a.id !== appointmentId);
-      window.localStorage?.setItem("appointments", JSON.stringify(updated));
-      return true;
+      console.error('Error canceling appointment:', error);
+      return false;
     }
   },
-  
+
+  // Upload Medical Record
   async uploadMedicalRecord(file, patientId) {
     try {
-      // For now, keep this as localStorage since file upload needs more setup
-      const recordData = {
-        id: Date.now(),
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        uploadDate: new Date().toISOString(),
-        patientId: patientId,
-        url: `local://medical-records/${patientId}/${file.name}`
-      };
-      
-      const stored = JSON.parse(window.localStorage?.getItem(`medicalRecords_${patientId}`)) || [];
-      const updated = [...stored, recordData];
-      window.localStorage?.setItem(`medicalRecords_${patientId}`, JSON.stringify(updated));
-      
-      return { success: true, data: recordData };
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('patientId', patientId);
+
+      const response = await fetch(`https://${API_BASE_URL}/medical-records`, {
+        method: 'POST',
+        headers: {
+          'x-functions-key': FUNCTION_APP_KEY,
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+      console.log('Upload Medical Record Response:', result);
+      return result;
     } catch (error) {
-      console.error('File upload failed:', error);
-      throw error;
+      console.error('Error uploading medical record:', error);
+      return { success: false, message: 'Failed to upload medical record.' };
     }
   },
 
+  // Get Medical Records
   async getMedicalRecords(patientId) {
     try {
-      const stored = JSON.parse(window.localStorage?.getItem(`medicalRecords_${patientId}`)) || [];
-      return stored;
+      const response = await fetch(`https://${API_BASE_URL}/medical-records?patientId=${encodeURIComponent(patientId)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-functions-key': FUNCTION_APP_KEY,
+        },
+      });
+
+      const result = await response.json();
+      console.log('Medical Records Response:', result);
+      return result.success ? result.data : [];
     } catch (error) {
-      console.error('Failed to get medical records:', error);
+      console.error('Error fetching medical records:', error);
       return [];
     }
   },
 
+  // Get User Profile
   async getUserProfile(userId, userType) {
     try {
-      // Try backend first for user data
-      let endpoint = userType === 'patient' ? 'patients' : 'doctors';
-      const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
+      const endpoint = userType === 'patient' ? 'patients' : 'doctors';
+      const response = await fetch(`https://${API_BASE_URL}/${endpoint}?username=${encodeURIComponent(userId)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'x-functions-key': FUNCTION_APP_KEY,
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const users = Array.isArray(data.data) ? data.data : data;
-        return users.find(user => user.name === userId);
-      }
-
-      // Fallback to localStorage
-      const users = JSON.parse(window.localStorage?.getItem("users")) || [];
-      return users.find(user => user.username === userId && user.userType === userType);
+      const result = await response.json();
+      console.log('User Profile Response:', result);
+      return result.success ? result.data[0] : null;
     } catch (error) {
-      console.error('Failed to get user profile:', error);
-      const users = JSON.parse(window.localStorage?.getItem("users")) || [];
-      return users.find(user => user.username === userId && user.userType === userType);
+      console.error('Error fetching user profile:', error);
+      return null;
     }
   },
 
+  // Update User Profile
   async updateUserProfile(userId, userType, profileData) {
     try {
-      // For now, keep this as localStorage since user management needs more setup
-      const users = JSON.parse(window.localStorage?.getItem("users")) || [];
-      const userIndex = users.findIndex(user => user.username === userId && user.userType === userType);
-      
-      if (userIndex !== -1) {
-        users[userIndex] = { ...users[userIndex], ...profileData };
-        window.localStorage?.setItem("users", JSON.stringify(users));
-        return users[userIndex];
-      }
-      
-      throw new Error('User not found');
+      const endpoint = userType === 'patient' ? 'patients' : 'doctors';
+      const response = await fetch(`https://${API_BASE_URL}/${endpoint}/${encodeURIComponent(userId)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-functions-key': FUNCTION_APP_KEY,
+        },
+        body: JSON.stringify(profileData),
+      });
+
+      const result = await response.json();
+      console.log('Update Profile Response:', result);
+      return result;
     } catch (error) {
-      console.error('Failed to update user profile:', error);
-      throw error;
+      console.error('Error updating profile:', error);
+      return { success: false, message: 'Failed to update profile.' };
     }
-  }
+  },
 };
 
 export default apiService;

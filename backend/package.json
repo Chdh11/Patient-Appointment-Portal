@@ -10,13 +10,19 @@
   "dependencies": {
     "@azure/functions": "^4.7.2",
     "@azure/identity": "^4.11.1",
+    "bcryptjs": "^3.0.2",
     "mssql": "^11.0.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
     "azure-functions-core-tools": "^4.x"
   },
-  "keywords": ["azure", "functions", "healthcare", "appointment"],
+  "keywords": [
+    "azure",
+    "functions",
+    "healthcare",
+    "appointment"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs"

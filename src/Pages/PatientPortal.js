@@ -17,18 +17,64 @@ function PatientPortalComponent({ onBack }) {
   const [dateFilter, setDateFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [medicalRecords, setMedicalRecords] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [userId,setUserId]=useState();
+  const [allAppointments, setAllAppointments] = useState([]); 
   
   const [regData, setRegData] = useState({
     username: "", password: "", email: "", phone: "", 
     firstName: "", lastName: "", dateOfBirth: "", address: ""
   });
 
-  const doctors = [
-    { id: 1, name: "Dr. Smith", specialty: "Cardiology", experience: "15 years", rating: 4.9 },
-    { id: 2, name: "Dr. Johnson", specialty: "Orthopedics", experience: "12 years", rating: 4.8 },
-    { id: 3, name: "Dr. Lee", specialty: "Pediatrics", experience: "10 years", rating: 4.9 },
-    { id: 4, name: "Dr. Patel", specialty: "Neurology", experience: "18 years", rating: 4.7 }
-  ];
+    //---------------handling login/Register-----------------
+
+  // register function
+const handleRegister = async (e) => {
+  e.preventDefault();
+  try {
+    const result = await apiService.registerPatient(regData);
+    if (result.success) {
+      alert("Registration successful! Please login.");
+      setShowRegister(false);
+      setRegData({
+        username: "", password: "", email: "", phone: "", 
+        firstName: "", lastName: "", dateOfBirth: "", address: ""
+      });
+    } else {
+      alert(result.message || "Registration failed");
+    }
+  } catch (error) {
+    console.error("Register error:", error);
+    alert("An error occurred while registering. Please try again.");
+  }
+};
+
+//login function
+const handleLogin = async (e) => {
+  e.preventDefault();
+  try {
+    const result = await apiService.loginPatient(username, password);
+    if (result.success) {
+      setIsAuthenticated(true);
+      setCurrentPage("dashboard");
+      setUserId(result.patient_id);
+      // Optionally store user info in state or context
+    } else {
+      alert(result.message || "Login failed");
+    }
+  } catch (error) {
+    console.error("Login error:", error);
+    alert("An error occurred while logging in. Please try again.");
+  }
+};
+
+  useEffect(() => {
+  const fetchDoctors = async () => {
+    const data = await apiService.getDoctors();
+    setDoctors(data);
+  };
+  fetchDoctors();
+}, []);
 
   const generateTimeSlots = () => {
     let slots = [];
@@ -50,77 +96,64 @@ function PatientPortalComponent({ onBack }) {
 
   const loadAppointments = async () => {
     try {
-      const data = await apiService.getAppointments(username, 'patient');
+      const allData=await apiService.getAllAppointments();
+      setAllAppointments(allData);
+      const data = await apiService.getAppointments(username,'patient');
+      console.log(data)
       setAppointments(data);
     } catch (error) {
       console.error('Failed to load appointments:', error);
     }
   };
 
-  const loadMedicalRecords = () => {
-    const stored = JSON.parse(window.localStorage?.getItem(`medicalRecords_${username}`)) || [];
-    setMedicalRecords(stored);
-  };
+ const loadMedicalRecords = async () => {
+  try {
+    const data = await apiService.getMedicalRecords(username);
+    setMedicalRecords(data);
+  } catch (error) {
+    console.error('Failed to load medical records:', error);
+    setMedicalRecords([]);
+  }
+};
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    if (username && password) {
-      setIsAuthenticated(true);
-      setCurrentPage("dashboard");
-    }
-  };
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    // Store user data
-    const users = JSON.parse(window.localStorage?.getItem("users")) || [];
-    users.push({ ...regData, userType: 'patient' });
-    window.localStorage?.setItem("users", JSON.stringify(users));
-    
-    alert("Registration successful! Please login.");
-    setShowRegister(false);
-    setRegData({
-      username: "", password: "", email: "", phone: "", 
-      firstName: "", lastName: "", dateOfBirth: "", address: ""
-    });
-  };
 
   const handleBooking = async (e) => {
     e.preventDefault();
-    
-    // Check if slot is already booked
-    const isSlotTaken = appointments.some(
-      appt => appt.doctor === doctor && appt.day === day && appt.time === time
+    //check if the slot id already booked
+    const isSlotTaken = allAppointments.some(
+      appt => appt.doctor_name === doctor && appt.day.split('T')[0] === day && appt.time.split('T')[1]?.slice(0,5) === time
     );
-    
     if (isSlotTaken) {
       alert("This time slot is already booked. Please select another time.");
       return;
     }
-
     try {
-      const appointmentData = {
-        doctor, day, time, username,
-        patientName: username,
-        status: 'scheduled',
-        createdAt: new Date().toISOString()
-      };
-      
-      await apiService.createAppointment(appointmentData);
-      await loadAppointments();
-      
-      setConfirmation(`Appointment booked with ${doctor} on ${day} at ${time}`);
-      setDoctor(""); setDay(""); setTime("");
-      
-      setTimeout(() => {
+        const appointmentData = {
+          doctor_username: doctor, 
+          day: day,                        
+          time: time,          
+          patient_username: username,           
+          status: 'scheduled'
+        };
+
+        const result = await apiService.createAppointment(appointmentData);
+        
+        await loadAppointments();
+        setConfirmation(`Appointment booked with ${doctor.name} on ${day} at ${time}`);
+        setDoctor(""); setDay(""); setTime("");
+        setTimeout(() => {
         setConfirmation("");
         setCurrentPage("history");
-      }, 2000);
+        }, 
+        2000
+      );
     } catch (error) {
-      console.error('Booking failed:', error);
-      alert("Failed to book appointment. Please try again.");
-    }
-  };
+        console.error('Booking failed:', error);
+        alert("Failed to book appointment. Please try again.");
+      }
+};
+
 
   const cancelAppointment = async (id) => {
     try {
@@ -132,46 +165,56 @@ function PatientPortalComponent({ onBack }) {
   };
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      try {
-        const newRecord = { 
-          name: file.name, 
-          uploadDate: new Date().toISOString(), 
-          size: file.size,
-          type: file.type
-        };
-        const updated = [...medicalRecords, newRecord];
-        setMedicalRecords(updated);
-        window.localStorage?.setItem(`medicalRecords_${username}`, JSON.stringify(updated));
-      } catch (error) {
-        console.error('File upload failed:', error);
+  const file = e.target.files[0];
+  if (file) {
+    try {
+      const result = await apiService.uploadMedicalRecord(file, username);
+      if (result.success) {
+        setMedicalRecords(prev => [...prev, result.data]);
+      } else {
+        alert('Failed to upload medical record.');
       }
+    } catch (error) {
+      console.error('File upload failed:', error);
+      alert('Error uploading file.');
     }
-  };
+  }
+};
 
-  const getFilteredAppointments = (type) => {
-    const today = new Date();
-    let filtered = appointments;
+const getAppointmentDateTime = (a) => {
+  const dayPart = a.day.split('T')[0];         
+  const timePart = a.time.split('T')[1].slice(0,5); 
+  return new Date(`${dayPart}T${timePart}:00`);
+};
 
+const getFilteredAppointments = (type) => 
+  { 
+    const today = new Date(); 
+    // console.log(today)
+    let filtered = [...appointments]; 
+    // console.log("filtered1",filtered)
     if (type === 'upcoming') {
-      filtered = appointments.filter(a => new Date(`${a.day}T${a.time}`) >= today);
-    } else if (type === 'past') {
-      filtered = appointments.filter(a => new Date(`${a.day}T${a.time}`) < today);
-    }
-
+    filtered = filtered.filter(a => getAppointmentDateTime(a) >= today);
+  } else if (type === 'past') {
+    filtered = filtered.filter(a => getAppointmentDateTime(a) < today);
+  }
+    
     if (dateFilter) {
-      filtered = filtered.filter(a => a.day === dateFilter);
-    }
-
+    filtered = filtered.filter(a => a.day.split('T')[0] === dateFilter);
+  }
+    
     if (searchTerm) {
-      filtered = filtered.filter(a => 
-        a.doctor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.day.includes(searchTerm)
-      );
-    }
-
-    return filtered.sort((a, b) => new Date(`${a.day}T${a.time}`) - new Date(`${b.day}T${b.time}`));
+    const term = searchTerm.toLowerCase();
+    filtered = filtered.filter(a =>
+      (a.doctor_name && a.doctor_name.toLowerCase().includes(term)) ||
+      (a.day && a.day.includes(term))
+    );
+  }
+    
+    // Sort by datetime
+  filtered.sort((a, b) => getAppointmentDateTime(a) - getAppointmentDateTime(b));
+  return filtered;
+  
   };
 
   const isTimeSlotAvailable = (selectedTime) => {
@@ -343,6 +386,7 @@ function PatientPortalComponent({ onBack }) {
   }
 
   const upcomingAppointments = getFilteredAppointments('upcoming');
+  // console.log("upcoming",upcomingAppointments)
   const pastAppointments = getFilteredAppointments('past');
   const todayAppointments = appointments.filter(appt => appt.day === new Date().toISOString().split('T')[0]);
 
@@ -471,9 +515,9 @@ function PatientPortalComponent({ onBack }) {
                         <tbody>
                           {upcomingAppointments.map((appt) => (
                             <tr key={appt.id} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="py-4 px-4 font-medium">{appt.doctor}</td>
-                              <td className="py-4 px-4">{appt.day}</td>
-                              <td className="py-4 px-4">{appt.time}</td>
+                              <td className="py-4 px-4 font-medium">{appt.doctor_name}</td>
+                              <td className="py-4 px-4">{appt.day.split('T')[0]}</td>
+                              <td className="py-4 px-4">{appt.time.split('T')[1]?.slice(0,5)}</td>
                               <td className="py-4 px-4">
                                 <span className="bg-green-100 text-green-600 px-2 py-1 rounded-full text-xs font-medium">
                                   Scheduled
@@ -525,7 +569,7 @@ function PatientPortalComponent({ onBack }) {
                         <option value="">Choose a doctor</option>
                         {doctors.map((doc) => (
                           <option key={doc.id} value={doc.name}>
-                            {doc.name} - {doc.specialty}
+                            {doc.name} - {doc.specialization}
                           </option>
                         ))}
                       </select>
@@ -593,13 +637,13 @@ function PatientPortalComponent({ onBack }) {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="font-bold text-gray-800">{doc.name}</p>
-                            <p className="text-blue-600 font-medium">{doc.specialty}</p>
-                            <p className="text-sm text-gray-500">{doc.experience} experience</p>
+                            <p className="text-blue-600 font-medium">{doc.specialization}</p>
+                            {/* <p className="text-sm text-gray-500">{doc.experience} experience</p> */}
                           </div>
                           <div className="text-right">
                             <div className="flex items-center space-x-1">
                               <span className="text-yellow-500">★</span>
-                              <span className="font-medium">{doc.rating}</span>
+                              {/* <span className="font-medium">{doc.rating}</span> */}
                             </div>
                           </div>
                         </div>
@@ -674,15 +718,15 @@ function PatientPortalComponent({ onBack }) {
                       {upcomingAppointments.map((appt) => (
                         <div key={appt.id} className="flex items-center justify-between p-4 border-l-4 border-green-500 bg-green-50 rounded-lg">
                           <div>
-                            <p className="font-bold text-gray-800">Dr. {appt.doctor}</p>
+                            <p className="font-bold text-gray-800">{appt.doctor_name}</p>
                             <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                               <span className="flex items-center space-x-1">
                                 <Calendar size={14} />
-                                <span>{appt.day}</span>
+                                <span>{appt.day.split('T')[0]}</span>
                               </span>
                               <span className="flex items-center space-x-1">
                                 <Clock size={14} />
-                                <span>{appt.time}</span>
+                                <span>{appt.time.split('T')[1]?.slice(0,5)}</span>
                               </span>
                             </div>
                           </div>
@@ -714,15 +758,15 @@ function PatientPortalComponent({ onBack }) {
                     <div className="space-y-4">
                       {pastAppointments.map((appt) => (
                         <div key={appt.id} className="p-4 border-l-4 border-blue-500 bg-blue-50 rounded-lg">
-                          <p className="font-bold text-gray-800">Dr. {appt.doctor}</p>
+                          <p className="font-bold text-gray-800">{appt.doctor_name}</p>
                           <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                             <span className="flex items-center space-x-1">
                               <Calendar size={14} />
-                              <span>{appt.day}</span>
+                              <span>{appt.day.split('T')[0]}</span>
                             </span>
                             <span className="flex items-center space-x-1">
                               <Clock size={14} />
-                              <span>{appt.time}</span>
+                              <span>{appt.time.split('T')[1]?.slice(0,5)}</span>
                             </span>
                           </div>
                         </div>
@@ -749,12 +793,12 @@ function PatientPortalComponent({ onBack }) {
                         <Stethoscope className="text-white" size={32} />
                       </div>
                       <h3 className="text-xl font-bold text-gray-800 mb-2">{doc.name}</h3>
-                      <p className="text-blue-600 font-medium mb-2">{doc.specialty}</p>
-                      <p className="text-gray-500 text-sm mb-4">{doc.experience} experience</p>
+                      <p className="text-blue-600 font-medium mb-2">{doc.specialization}</p>
+                      {/* <p className="text-gray-500 text-sm mb-4">{doc.experience} experience</p> */}
                       <div className="flex items-center justify-center space-x-1 mb-4">
-                        <span className="text-yellow-500">★</span>
-                        <span className="font-medium">{doc.rating}</span>
-                        <span className="text-gray-500 text-sm">(125 reviews)</span>
+                        {/* <span className="text-yellow-500">★</span> */}
+                        {/* <span className="font-medium">{doc.rating}</span> */}
+                        {/* <span className="text-gray-500 text-sm">(125 reviews)</span> */}
                       </div>
                       <button
                         onClick={() => {
@@ -795,7 +839,7 @@ function PatientPortalComponent({ onBack }) {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
                     <input
                       type="email"
-                      value="patient@edoc.com"
+                      value={"patient@edoc.com"}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
