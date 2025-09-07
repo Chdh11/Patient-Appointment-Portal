@@ -20,6 +20,11 @@ function PatientPortalComponent({ onBack }) {
   const [doctors, setDoctors] = useState([]);
   const [userId,setUserId]=useState();
   const [allAppointments, setAllAppointments] = useState([]); 
+
+const [uploading, setUploading] = useState(false);
+const [uploadProgress, setUploadProgress] = useState(null);
+// const [description, setDescription] = useState('');
+  
   
   const [regData, setRegData] = useState({
     username: "", password: "", email: "", phone: "", 
@@ -108,8 +113,12 @@ const handleLogin = async (e) => {
 
  const loadMedicalRecords = async () => {
   try {
+    console.log('Loading medical records for username:', username);
     const data = await apiService.getMedicalRecords(username);
     setMedicalRecords(data);
+    
+    // Log the data directly, not the state variable
+    console.log('Loaded medical records:', data);
   } catch (error) {
     console.error('Failed to load medical records:', error);
     setMedicalRecords([]);
@@ -166,20 +175,146 @@ const handleLogin = async (e) => {
 
   const handleFileUpload = async (e) => {
   const file = e.target.files[0];
-  if (file) {
-    try {
-      const result = await apiService.uploadMedicalRecord(file, username);
-      if (result.success) {
-        setMedicalRecords(prev => [...prev, result.data]);
-      } else {
-        alert('Failed to upload medical record.');
+  if (!file) return;
+
+  // File validation
+  const maxSize = 50 * 1024 * 1024; // 50MB limit
+  const allowedTypes = [
+    'application/pdf',
+    'image/jpeg',
+    'image/jpg', 
+    'image/png',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
+
+  if (file.size > maxSize) {
+    alert('File size must be less than 50MB.');
+    e.target.value = ''; // Clear the input
+    return;
+  }
+
+  if (!allowedTypes.includes(file.type)) {
+    alert('Please upload only PDF, DOC, DOCX, JPG, or PNG files.');
+    e.target.value = ''; // Clear the input
+    return;
+  }
+
+  setUploading(true);
+  setUploadProgress('Uploading...');
+
+  try {
+    // Use description or default
+    let userDescription = prompt("Please enter a description for the file:", "");
+    const fileDescription = userDescription && userDescription.trim() !== "" 
+      ? userDescription 
+      : `${file.name} uploaded via portal`;
+    console.log(fileDescription);
+    const result = await apiService.uploadMedicalRecord(file, username, fileDescription);
+
+    
+    if (result.success) {
+      setUploadProgress('Upload successful!');
+      
+      // Add to medical records list with updated structure
+      const newRecord = {
+        record_id: result.data.databaseRecord?.record_id,
+        patient_id: result.data.databaseRecord?.patient_id,
+        file_name: result.data.fileName,
+        blob_name: result.data.blobName, // Now includes patient folder structure
+        file_size: result.data.fileSize,
+        mime_type: result.data.mimeType,
+        description: result.data.description,
+        uploaded_at: result.data.databaseRecord?.uploaded_at || new Date().toISOString(),
+        // Additional display fields
+        patient_username: username,
+        url: result.data.url
+      };
+
+      setMedicalRecords(prev => [newRecord, ...prev]); 
+      // // Add to beginning of list
+      // console.log(medicalRecords)
+      
+      // Show success message
+      alert(`Medical record "${file.name}" uploaded successfully!`);
+      
+      // Clear the file input and description
+      e.target.value = '';
+      // setDescription('');
+      
+      // Show warning if any
+      if (result.data.warning) {
+        console.warn('Upload warning:', result.data.warning);
       }
-    } catch (error) {
-      console.error('File upload failed:', error);
-      alert('Error uploading file.');
+      
+    } else {
+      setUploadProgress(null);
+      alert(`Upload failed: ${result.message || 'Unknown error occurred.'}`);
+    }
+    
+  } catch (error) {
+    console.error('File upload failed:', error);
+    setUploadProgress(null);
+    alert(`Error uploading file: ${error.message || 'Network error occurred.'}`);
+  } finally {
+    setUploading(false);
+    // Clear progress message after 3 seconds if successful
+    if (uploadProgress === 'Upload successful!') {
+      setTimeout(() => setUploadProgress(null), 3000);
     }
   }
 };
+
+const handleFileDelete = async (blobName, recordId, fileName) => {
+  
+
+  // Show loading state (you might want to add a loading indicator)
+  console.log('Deleting file:', fileName);
+  
+  try {
+    const result = await apiService.deleteMedicalRecordFile(blobName);
+    
+    if (result.success) {
+      // Remove from the medical records list
+      setMedicalRecords(prev => prev.filter(record => record.record_id !== recordId));
+      
+      // Show success message
+      alert(`"${fileName}" deleted successfully.`);
+      
+      // Handle any warnings
+      if (result.warning) {
+        console.warn('Delete warning:', result.warning);
+        alert(`File deleted but with warning: ${result.warning}`);
+      }
+      
+    } else {
+      // Handle different types of errors
+      let errorMessage = 'Delete failed';
+      
+      if (result.error) {
+        errorMessage = result.error;
+      } else if (result.message) {
+        errorMessage = result.message;
+      }
+      
+      console.error('Delete failed:', result);
+      alert(`Delete failed: ${errorMessage}`);
+      
+      // If it's a network error, suggest retry
+      if (result.details?.includes('Network error')) {
+        const retry = window.confirm('Network error occurred. Would you like to try again?');
+        if (retry) {
+          handleFileDelete(blobName, recordId, fileName);
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('Unexpected delete error:', error);
+    alert('An unexpected error occurred while deleting the file. Please try again.');
+  }
+};
+
 
 const getAppointmentDateTime = (a) => {
   const dayPart = a.day.split('T')[0];         
@@ -907,18 +1042,18 @@ const getFilteredAppointments = (type) =>
                       <p>No medical records uploaded</p>
                     </div>
                   ) : (
-                    medicalRecords.map((record, index) => (
-                      <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                    medicalRecords.map((record) => (
+                      <div key={record.record_id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                         <div className="flex items-center space-x-3">
                           <FileText className="text-blue-500" size={24} />
                           <div>
-                            <p className="font-medium">{record.name}</p>
+                            <p className="font-medium">{record.description}</p>
                             <p className="text-sm text-gray-500">
-                              Uploaded: {new Date(record.uploadDate).toLocaleDateString()}
+                              {record.uploaded_at}
                             </p>
                           </div>
                         </div>
-                        <button className="text-red-600 hover:text-red-800">
+                        <button className="text-red-600 hover:text-red-800" onClick={() => handleFileDelete(record.blob_name, record.record_id, record.file_name)} >
                           <X size={20} />
                         </button>
                       </div>

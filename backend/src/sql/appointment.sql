@@ -110,14 +110,14 @@
 -- Create user for the Function App's managed identity
 -- Replace 'healthcare-functions-app' with your actual Function App name
 -- Create user for your function app
--- CREATE USER [appointment-function-app] FROM EXTERNAL PROVIDER;
+-- CREATE USER [appointment-function-app3] FROM EXTERNAL PROVIDER;
 
--- -- Grant permissions
--- ALTER ROLE db_datareader ADD MEMBER [appointment-function-app];
--- ALTER ROLE db_datawriter ADD MEMBER [appointment-function-app];
+-- -- -- Grant permissions
+-- ALTER ROLE db_datareader ADD MEMBER [appointment-function-app2];
+-- ALTER ROLE db_datawriter ADD MEMBER [appointment-function-app2];
 
 -- -- Verify
--- SELECT name, type_desc FROM sys.database_principals WHERE name = 'appointment-function-app';
+-- SELECT name, type_desc FROM sys.database_principals WHERE name = 'appointment-function-app2';
 
 -- Add the doctors that your frontend expects
 -- INSERT INTO Doctors (name, email, password_hash, specialization)
@@ -221,3 +221,30 @@
 -- (6, 'mri_scan.pdf', '/files/test/mri_scan.pdf', GETDATE(), 'MRI brain scan');
 
 
+-- ALTER TABLE MedicalRecords 
+-- ADD blob_name NVARCHAR(500),
+--     file_size BIGINT,
+--     mime_type NVARCHAR(100);
+
+-- UPDATE MedicalRecords 
+-- SET blob_name = file_path 
+-- WHERE blob_name IS NULL;
+
+-- INSERT INTO MedicalRecords (patient_id, file_name, blob_name, file_size, mime_type, description)
+-- VALUES 
+-- (1, 'blood_test.pdf', 'patient1/uuid_blood_test.pdf', 102400, 'application/pdf', 'Blood test results'),
+-- (2, 'xray_image.jpg', 'patient2/uuid_xray_image.jpg', 524288, 'image/jpeg', 'X-ray scan of chest'),
+-- (3, 'mri_scan.pdf', 'patient3/uuid_mri_scan.pdf', 1048576, 'application/pdf', 'MRI brain scan');
+
+select * from MedicalRecords
+
+
+-- Create user for your function app
+-- CREATE USER [appointment-function-app3] FROM EXTERNAL PROVIDER;
+
+-- -- Grant permissions
+-- ALTER ROLE db_datareader ADD MEMBER [appointment-function-app3];
+-- ALTER ROLE db_datawriter ADD MEMBER [appointment-function-app3];
+
+-- -- Verify
+-- SELECT name, type_desc FROM sys.database_principals WHERE name = 'appointment-function-app3';

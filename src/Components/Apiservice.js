@@ -1,7 +1,9 @@
 // Replace your current Apiservice.js with this updated version
 import bcrypt from 'bcryptjs';
 
-const API_BASE_URL = 'appointment-function-app-hfbuc2hwbbbrfshd.southeastasia-01.azurewebsites.net/api';
+const API_BASE_URL = 'https://appointment-function-app3-czccc8hgeyeuebbf.eastasia-01.azurewebsites.net/api';
+
+// const API_BASE_URL= ' http://localhost:7071/api'
 const FUNCTION_APP_KEY=process.env.REACT_APP_FUNCTION_APP_KEY
 
 
@@ -9,7 +11,7 @@ const apiService = {
   // Register a patient
   async registerPatient(data){
     try {
-      const response = await fetch(`https://${API_BASE_URL}/patients`, {
+      const response = await fetch(`${API_BASE_URL}/patients`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -38,7 +40,7 @@ const apiService = {
   //login patients with username and password
   async loginPatient(username, password) {
     try {
-      const response = await fetch(`https://${API_BASE_URL}/patients`, {
+      const response = await fetch(`${API_BASE_URL}/patients`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +72,7 @@ const apiService = {
   },
   async getDoctors() {
   try {
-    const response = await fetch(`https://${API_BASE_URL}/doctors`, {
+    const response = await fetch(`${API_BASE_URL}/doctors`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -90,7 +92,7 @@ const apiService = {
   async getAppointments(username, userType = 'patient') {
   try {
     const response = await fetch(
-      `https://${API_BASE_URL}/appointments?username=${encodeURIComponent(username)}&userType=${encodeURIComponent(userType)}`,
+      `${API_BASE_URL}/appointments?username=${encodeURIComponent(username)}&userType=${encodeURIComponent(userType)}`,
       {
         method: 'GET',
         headers: {
@@ -111,7 +113,7 @@ const apiService = {
 // Get all appointments (for slot checking)
 async getAllAppointments() {
   try {
-    const response = await fetch(`https://${API_BASE_URL}/appointments`, {
+    const response = await fetch(`${API_BASE_URL}/appointments`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -131,7 +133,7 @@ async getAllAppointments() {
   // Create Appointment
   async createAppointment(appointmentData) {
     try {
-      const response = await fetch(`https://${API_BASE_URL}/appointments`, {
+      const response = await fetch(`${API_BASE_URL}/appointments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +154,7 @@ async getAllAppointments() {
   // Cancel Appointment
   async cancelAppointment(appointmentId) {
     try {
-      const response = await fetch(`https://${API_BASE_URL}/appointments/${appointmentId}`, {
+      const response = await fetch(`${API_BASE_URL}/appointments/${appointmentId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -169,55 +171,108 @@ async getAllAppointments() {
     }
   },
 
-  // Upload Medical Record
-  async uploadMedicalRecord(file, patientId) {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('patientId', patientId);
+  async uploadMedicalRecord(file, patientUsername, fileDescription) {
+  try {
+    // First, upload the file to blob storage
+    const uploadUrl = `${API_BASE_URL}/upload/medical-records?filename=${encodeURIComponent(file.name)}&patientUsername=${encodeURIComponent(patientUsername)}&description=${encodeURIComponent(fileDescription)}&contentType=${encodeURIComponent(file.type)}`;
+    
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'x-functions-key': FUNCTION_APP_KEY,
+        'Content-Type': 'application/octet-stream',
+      },
+      body: file, // Send file directly as binary data
+    });
 
-      const response = await fetch(`https://${API_BASE_URL}/medical-records`, {
-        method: 'POST',
-        headers: {
-          'x-functions-key': FUNCTION_APP_KEY,
-        },
-        body: formData,
-      });
-
-      const result = await response.json();
-      console.log('Upload Medical Record Response:', result);
-      return result;
-    } catch (error) {
-      console.error('Error uploading medical record:', error);
-      return { success: false, message: 'Failed to upload medical record.' };
+    if (!uploadResponse.ok) {
+      throw new Error(`Upload failed: ${uploadResponse.statusText}`);
     }
-  },
+
+    const result = await uploadResponse.json();
+    console.log('Upload Medical Record Response:', result);
+    
+    return {
+      success: result.success,
+      message: result.message || 'Medical record uploaded successfully',
+      data: {
+        fileName: result.data?.fileName,
+        originalName: file.name,
+        size: file.size,
+        url: result.data?.url,
+        databaseRecord: result.data?.databaseRecord
+      }
+    };
+
+  } catch (error) {
+    console.error('Error uploading medical record:', error);
+    return { 
+      success: false, 
+      message: error.message || 'Failed to upload medical record.' 
+    };
+  }
+},
+async deleteMedicalRecordFile(fileName) {
+    try {
+        console.log('=== FRONTEND DELETE DEBUG ===');
+        console.log('Original fileName:', fileName);
+        console.log('Encoded fileName:', encodeURIComponent(fileName));
+        
+        const url = `${API_BASE_URL}/files/medical-records/${encodeURIComponent(fileName)}`;
+        console.log('Delete URL:', url);
+
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'x-functions-key': FUNCTION_APP_KEY,
+                'Content-Type': 'application/json',
+            },
+        });
+
+        const result = await response.json();
+        console.log('Delete Medical Record File Response:', result);
+        
+        if (!response.ok) {
+            throw new Error(result.error || result.message || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        return result;
+
+    } catch (error) {
+        console.error('Error deleting medical record file:', error);
+        return { 
+            success: false, 
+            error: error.message || 'Failed to delete medical record file.',
+            details: error.name === 'TypeError' ? 'Network error - please check your connection' : error.message
+        };
+    }
+},
 
   // Get Medical Records
-  async getMedicalRecords(patientId) {
-    try {
-      const response = await fetch(`https://${API_BASE_URL}/medical-records?patientId=${encodeURIComponent(patientId)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-functions-key': FUNCTION_APP_KEY,
-        },
-      });
+  async getMedicalRecords(username) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/medical-records/${encodeURIComponent(username)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-functions-key': FUNCTION_APP_KEY,
+      },
+    });
 
-      const result = await response.json();
-      console.log('Medical Records Response:', result);
-      return result.success ? result.data : [];
-    } catch (error) {
-      console.error('Error fetching medical records:', error);
-      return [];
-    }
-  },
+    const result = await response.json();
+    console.log('Medical Records Response:', result);
+    return result.success ? result.data : [];
+  } catch (error) {
+    console.error('Error fetching medical records:', error);
+    return [];
+  }
+},
 
   // Get User Profile
   async getUserProfile(userId, userType) {
     try {
       const endpoint = userType === 'patient' ? 'patients' : 'doctors';
-      const response = await fetch(`https://${API_BASE_URL}/${endpoint}?username=${encodeURIComponent(userId)}`, {
+      const response = await fetch(`${API_BASE_URL}/${endpoint}?username=${encodeURIComponent(userId)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -238,7 +293,7 @@ async getAllAppointments() {
   async updateUserProfile(userId, userType, profileData) {
     try {
       const endpoint = userType === 'patient' ? 'patients' : 'doctors';
-      const response = await fetch(`https://${API_BASE_URL}/${endpoint}/${encodeURIComponent(userId)}`, {
+      const response = await fetch(`${API_BASE_URL}/${endpoint}/${encodeURIComponent(userId)}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

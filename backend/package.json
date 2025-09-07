@@ -10,8 +10,10 @@
   "dependencies": {
     "@azure/functions": "^4.7.2",
     "@azure/identity": "^4.11.1",
+    "@azure/storage-blob": "^12.28.0",
     "bcryptjs": "^3.0.2",
     "mssql": "^11.0.1",
+    "multer": "^2.0.2",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

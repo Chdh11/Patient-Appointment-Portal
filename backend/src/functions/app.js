@@ -1,5 +1,8 @@
 const { app } = require('@azure/functions');
 const { executeQuery } = require('../db');
+const { storageHelpers, CONTAINERS, initializeContainers } = require('../storage');
+
+initializeContainers();
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -52,7 +55,7 @@ app.http('patients', {
             }
 
         } catch (error) {
-            context.log.error(error);
+            context.error(error);
             return { status: 500, headers: corsHeaders, jsonBody: { success: false, error: error.message } };
         }
     }
@@ -94,7 +97,7 @@ app.http('doctors', {
             }
 
         } catch (error) {
-            context.log.error(error);
+            context.error(error);
             return { status: 500, headers: corsHeaders, jsonBody: { success: false, error: error.message } };
         }
     }
@@ -139,7 +142,7 @@ app.http('doctorSchedule', {
             }
 
         } catch (error) {
-            context.log.error(error);
+            context.error(error);
             return { status: 500,headers: corsHeaders,  jsonBody: { success: false, error: error.message } };
         }
     }
@@ -228,7 +231,7 @@ app.http('appointments', {
             }
 
         } catch (error) {
-            context.log.error(error);
+            context.error(error);
             return { status: 500, headers: corsHeaders, jsonBody: { success: false, error: error.message } };
         }
     }
@@ -286,55 +289,329 @@ app.http('reminders', {
             }
 
         } catch (error) {
-            context.log.error(error);
+            context.error(error);
             return { status: 500, headers: corsHeaders, jsonBody: { success: false, error: error.message } };
         }
     }
 });
 
 // ==================== MEDICAL RECORDS ====================
-app.http('medicalRecords', {
-    methods: ['GET', 'POST'],
+// app.http('medicalRecords', {
+//     methods: ['GET', 'POST'],
+//     authLevel: 'anonymous',
+//     route: 'medical-records',
+//     handler: async (request, context) => {
+//         try {
+//             if (request.method === 'GET') {
+//                 const query = `
+//                     SELECT mr.record_id, mr.file_name, mr.file_path, mr.uploaded_at,
+//                            p.patient_id, p.name as patient_name, p.username as patient_username, p.phone as patient_phone, p.email as patient_email
+//                     FROM MedicalRecords mr
+//                     JOIN Patients p ON mr.patient_id = p.patient_id
+//                     ORDER BY mr.uploaded_at DESC
+//                 `;
+//                 const result = await executeQuery(query);
+//                 return { status: 200, headers: corsHeaders, jsonBody: { success: true, data: result.recordset, count: result.recordset.length } };
+//             }
+
+//             if (request.method === 'POST') {
+//                 const body = await request.json();
+//                 const { patient_username, file_name, file_path } = body;
+//                 if (!patient_username || !file_name || !file_path) {
+//                     return { status: 400, headers: corsHeaders, jsonBody: { success: false, error: "Missing required fields" } };
+//                 }
+
+//                 const patientQuery = `SELECT patient_id FROM Patients WHERE username = @username`;
+//                 const patientResult = await executeQuery(patientQuery, { username: patient_username });
+//                 if (patientResult.recordset.length === 0) return { status: 404,  jsonBody: { success: false, error: "Patient not found" } };
+//                 const patient_id = patientResult.recordset[0].patient_id;
+
+//                 const query = `
+//                     INSERT INTO MedicalRecords (patient_id, file_name, file_path)
+//                     OUTPUT INSERTED.record_id, INSERTED.file_name, INSERTED.file_path, INSERTED.uploaded_at
+//                     VALUES (@patient_id, @file_name, @file_path)
+//                 `;
+//                 const result = await executeQuery(query, { patient_id, file_name, file_path });
+//                 return { status: 201, headers: corsHeaders, jsonBody: { success: true, message: "Medical record uploaded", data: result.recordset[0] } };
+//             }
+
+//         } catch (error) {
+//             context.error(error);
+//             return { status: 500, headers: corsHeaders, jsonBody: { success: false, error: error.message } };
+//         }
+//     }
+// });
+
+//======================get all records based on patient id=================
+app.http('medical-records', {
+    methods: ['GET'],
     authLevel: 'anonymous',
-    route: 'medical-records',
+    route: 'medical-records/{username}',
     handler: async (request, context) => {
+        const username = request.params.username;
+
         try {
-            if (request.method === 'GET') {
-                const query = `
-                    SELECT mr.record_id, mr.file_name, mr.file_path, mr.uploaded_at,
-                           p.patient_id, p.name as patient_name, p.username as patient_username, p.phone as patient_phone, p.email as patient_email
-                    FROM MedicalRecords mr
-                    JOIN Patients p ON mr.patient_id = p.patient_id
-                    ORDER BY mr.uploaded_at DESC
-                `;
-                const result = await executeQuery(query);
-                return { status: 200, headers: corsHeaders, jsonBody: { success: true, data: result.recordset, count: result.recordset.length } };
+            const query = `
+                SELECT mr.record_id, mr.file_name, mr.blob_name, mr.uploaded_at, mr.description,
+                       p.patient_id, p.name as patient_name, p.username as patient_username, p.phone as patient_phone, p.email as patient_email
+                FROM MedicalRecords mr
+                JOIN Patients p ON mr.patient_id = p.patient_id 
+                WHERE p.username = @username
+                ORDER BY mr.uploaded_at DESC
+            `;
+            
+            const params = { username: username };
+            const result = await executeQuery(query, params);
+            
+            return { 
+                status: 200, 
+                headers: corsHeaders, 
+                jsonBody: { 
+                    success: true, 
+                    data: result.recordset, 
+                    count: result.recordset.length 
+                } 
+            };
+        } catch (error) {
+            context.error(error);
+            return { 
+                status: 500, 
+                headers: corsHeaders, 
+                jsonBody: { 
+                    success: false, 
+                    error: error.message 
+                } 
+            };
+        }
+    }
+});
+
+//=======================File Upload=========================
+
+app.http('uploadFile', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    route: 'upload/{containerType}',
+    handler: async (request, context) => {
+        const containerType = request.params.containerType;
+        
+        try {
+            // Validate container type
+            const validContainers = {
+                'medical-records': CONTAINERS.MEDICAL_RECORDS
+            };
+
+            if (!validContainers[containerType]) {
+                return {
+                    status: 400,
+                    headers: corsHeaders,
+                    jsonBody: { success: false, error: "Invalid container type" }
+                };
             }
 
-            if (request.method === 'POST') {
-                const body = await request.json();
-                const { patient_username, file_name, file_path } = body;
-                if (!patient_username || !file_name || !file_path) {
-                    return { status: 400, headers: corsHeaders, jsonBody: { success: false, error: "Missing required fields" } };
+            // Get file data from request
+            const fileBuffer = Buffer.from(await request.arrayBuffer());
+            
+            if (fileBuffer.length === 0) {
+                return {
+                    status: 400,
+                    headers: corsHeaders,
+                    jsonBody: { success: false, error: "No file data provided" }
+                };
+            }
+
+            // Get query parameters
+            const originalFileName = request.query.get('filename') || 'uploaded_file';
+            const patientUsername = request.query.get('patientUsername');
+            const description = request.query.get('description') || 'Medical record uploaded via portal';
+            const contentType = request.query.get('contentType') || 'application/octet-stream';
+
+            // Generate unique blob name with patient folder structure
+            let blobName;
+            if (patientUsername) {
+                const uniqueId = storageHelpers.generateUniqueFileName(originalFileName);
+                blobName = `${patientUsername}/${uniqueId}`;
+            } else {
+                blobName = storageHelpers.generateUniqueFileName(originalFileName);
+            }
+
+            // Upload file to blob storage
+            const uploadResult = await storageHelpers.uploadFile(
+                validContainers[containerType],
+                blobName,
+                fileBuffer,
+                contentType
+            );
+
+            // If this is a medical record, save to database with all required fields
+            if (containerType === 'medical-records' && patientUsername) {
+                const { executeQuery } = require('../db');
+                
+                try {
+                    // Get patient_id
+                    const patientQuery = `SELECT patient_id FROM Patients WHERE username = @username`;
+                    const patientResult = await executeQuery(patientQuery, { username: patientUsername });
+                    
+                    if (patientResult.recordset.length > 0) {
+                        const patient_id = patientResult.recordset[0].patient_id;
+                        
+                        // Save file info to MedicalRecords table with all fields
+                        const recordQuery = `
+                            INSERT INTO MedicalRecords (patient_id, file_name, blob_name, file_size, mime_type, description)
+                            OUTPUT INSERTED.record_id, INSERTED.patient_id, INSERTED.file_name, INSERTED.blob_name, 
+                                   INSERTED.file_size, INSERTED.mime_type, INSERTED.description, INSERTED.uploaded_at
+                            VALUES (@patient_id, @file_name, @blob_name, @file_size, @mime_type, @description)
+                        `;
+                        
+                        const recordParams = {
+                            patient_id: patient_id,
+                            file_name: originalFileName,
+                            blob_name: blobName,
+                            file_size: fileBuffer.length,
+                            mime_type: contentType,
+                            description: description
+                        };
+                        
+                        const recordResult = await executeQuery(recordQuery, recordParams);
+                        uploadResult.databaseRecord = recordResult.recordset[0];
+                        
+                        console.log('Database record created:', recordResult.recordset[0]);
+                    } else {
+                        console.log('Patient not found for username:', patientUsername);
+                        uploadResult.warning = 'File uploaded but patient not found for database record';
+                    }
+                } catch (dbError) {
+                    console.error('Database error:', dbError);
+                    uploadResult.warning = 'File uploaded but database record creation failed';
+                    uploadResult.dbError = dbError.message;
                 }
-
-                const patientQuery = `SELECT patient_id FROM Patients WHERE username = @username`;
-                const patientResult = await executeQuery(patientQuery, { username: patient_username });
-                if (patientResult.recordset.length === 0) return { status: 404,  jsonBody: { success: false, error: "Patient not found" } };
-                const patient_id = patientResult.recordset[0].patient_id;
-
-                const query = `
-                    INSERT INTO MedicalRecords (patient_id, file_name, file_path)
-                    OUTPUT INSERTED.record_id, INSERTED.file_name, INSERTED.file_path, INSERTED.uploaded_at
-                    VALUES (@patient_id, @file_name, @file_path)
-                `;
-                const result = await executeQuery(query, { patient_id, file_name, file_path });
-                return { status: 201, headers: corsHeaders, jsonBody: { success: true, message: "Medical record uploaded", data: result.recordset[0] } };
             }
+
+            return {
+                status: 200,
+                headers: corsHeaders,
+                jsonBody: {
+                    success: true,
+                    message: "File uploaded successfully",
+                    data: {
+                        fileName: originalFileName,
+                        blobName: blobName,
+                        fileSize: fileBuffer.length,
+                        mimeType: contentType,
+                        description: description,
+                        url: uploadResult.url,
+                        databaseRecord: uploadResult.databaseRecord,
+                        warning: uploadResult.warning,
+                        uploadResponse: uploadResult.uploadResponse
+                    }
+                }
+            };
 
         } catch (error) {
-            context.log.error(error);
-            return { status: 500, headers: corsHeaders, jsonBody: { success: false, error: error.message } };
+            console.error('Upload error:', error);
+            context.error('Upload error:', error.message);
+            
+            return {
+                status: 500,
+                headers: corsHeaders,
+                jsonBody: { success: false, error: error.message }
+            };
+        }
+    }
+});
+
+// ==================== UPDATED DELETE FUNCTION ====================
+app.http('deleteFile', {
+    methods: ['DELETE'],
+    authLevel: 'anonymous',
+    route: 'files/{containerType}/{*blobPath}',
+    handler: async (request, context) => {
+        const containerType = request.params.containerType;
+        const blobPath = request.params.blobPath;
+
+        // ADD THIS LOGGING
+        console.log('=== DELETE REQUEST DEBUG ===');
+        console.log('Container Type:', containerType);
+        console.log('Blob Path from URL:', blobPath);
+        console.log('Full URL:', request.url);
+        console.log('Raw params:', request.params);
+
+        try {
+            // Validate container type
+            const validContainers = {
+                'medical-records': CONTAINERS.MEDICAL_RECORDS
+            };
+
+            if (!validContainers[containerType]) {
+                return {
+                    status: 400,
+                    headers: corsHeaders,
+                    jsonBody: { success: false, error: "Invalid container type" }
+                };
+            }
+
+            // ADD MORE LOGGING BEFORE STORAGE CALL
+            console.log('Attempting to delete from container:', validContainers[containerType]);
+            console.log('Full blob path being deleted:', blobPath);
+
+            // Delete from blob storage
+            const deleteResult = await storageHelpers.deleteFile(
+                validContainers[containerType],
+                blobPath  // This should be the full path: chhavi/1757230690615_g25t7h.pdf
+            );
+
+            // If this is a medical record, also delete from database using blob_name
+            if (containerType === 'medical-records') {
+                try {
+                    const { executeQuery } = require('../db');
+                    
+                    // ADD LOGGING FOR DATABASE OPERATION
+                    console.log('Deleting from database with blob_name:', blobPath);
+                    
+                    const recordQuery = `DELETE FROM MedicalRecords WHERE blob_name = @blob_name`;
+                    const dbResult = await executeQuery(recordQuery, { blob_name: blobPath });
+                    
+                    console.log('Database delete result:', dbResult);
+                    
+                } catch (dbError) {
+                    console.error('Database delete error:', dbError);
+                    return {
+                        status: 200,
+                        headers: corsHeaders,
+                        jsonBody: {
+                            success: true,
+                            message: "File deleted from storage but database cleanup failed",
+                            warning: dbError.message
+                        }
+                    };
+                }
+            }
+
+            return {
+                status: 200,
+                headers: corsHeaders,
+                jsonBody: {
+                    success: true,
+                    message: "File deleted successfully",
+                    data: deleteResult
+                }
+            };
+
+        } catch (error) {
+            console.error('Delete file error:', error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+            });
+            
+            context.error('Delete file error:', error.message);
+            
+            return {
+                status: 500,
+                headers: corsHeaders,
+                jsonBody: { success: false, error: error.message }
+            };
         }
     }
 });
