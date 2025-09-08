@@ -1,9 +1,9 @@
 // Replace your current Apiservice.js with this updated version
 import bcrypt from 'bcryptjs';
 
-// const API_BASE_URL = 'https://appointment-function-app3-czccc8hgeyeuebbf.eastasia-01.azurewebsites.net/api';
+const API_BASE_URL = 'https://appointment-function-app3-czccc8hgeyeuebbf.eastasia-01.azurewebsites.net/api';
 
-const API_BASE_URL= ' http://localhost:7071/api'
+// const API_BASE_URL= ' http://localhost:7071/api'
 const FUNCTION_APP_KEY=process.env.REACT_APP_FUNCTION_APP_KEY
 
 
