@@ -11,6 +11,11 @@ function DoctorPortalComponent({ onBack }) {
   const [password, setPassword] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [email,setEmail]=useState("");
+  const [docName,setDocName]=useState("");
+  const [license,setLicense]=useState("");
+  const [speciality,setSpeciality]=useState("");
+  const [docID,setDocId]=useState()
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -27,13 +32,52 @@ function DoctorPortalComponent({ onBack }) {
     }
   };
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (username && password) {
+  const fetchDocData=async(username)=>{
+    const data = await apiService.getDoctortData(username);
+    setEmail(data.email);
+    setSpeciality(data.specialization);
+    setDocName(data.name);
+    setDocId(data.doctor_id);
+    setLicense(data.license_number);
+    console.log(data);
+  }
+
+  const handleLogin = async (e) => {
+  e.preventDefault();
+  try {
+    const result = await apiService.loginDoctor(username, password);
+    if (result.success) {
       setIsAuthenticated(true);
       setCurrentPage("dashboard");
+      fetchDocData(username);
+      // Optionally store user info in state or context
+    } else {
+      alert("Login failed");
     }
-  };
+  } catch (error) {
+    console.error("Login error:", error);
+    alert("An error occurred while logging in. Please try again.");
+  }
+};
+  // const handleLogin = (e) => {
+  //   e.preventDefault();
+  //   if (username && password) {
+  //     setIsAuthenticated(true);
+  //     setCurrentPage("dashboard");
+  //   }
+  // };
+//   const handleEmailChange = (e) => setEmail(e.target.value);
+
+//   const handleUpdateProfile = async () => {
+
+//   const result = await apiService.updateDoctorData(userId, email);
+
+//   if (result.success) {
+//     alert('Profile updated successfully!');
+//   } else {
+//     alert('Failed to update profile: ' + (result.error || 'Unknown error'));
+//   }
+// };
 
   const cancelAppointment = async (id) => {
     try {
@@ -527,7 +571,7 @@ const getFilteredAppointments = (type) =>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Doctor Name</label>
                     <input
                       type="text"
-                      value={`Dr. ${username}`}
+                      value={docName}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
                       disabled
                     />
@@ -536,7 +580,7 @@ const getFilteredAppointments = (type) =>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
                     <input
                       type="email"
-                      value="doctor@edoc.com"
+                      value={email}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
@@ -544,7 +588,7 @@ const getFilteredAppointments = (type) =>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Specialty</label>
                     <input
                       type="text"
-                      value="General Medicine"
+                      value={speciality}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
@@ -552,14 +596,14 @@ const getFilteredAppointments = (type) =>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">License Number</label>
                     <input
                       type="text"
-                      value="MD-12345"
+                      value={license}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
                   </div>
                 </div>
-                <button className="mt-6 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                {/* <button className="mt-6 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">
                   Update Profile
-                </button>
+                </button> */}
               </div>
 
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">

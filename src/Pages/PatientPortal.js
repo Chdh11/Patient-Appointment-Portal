@@ -20,6 +20,10 @@ function PatientPortalComponent({ onBack }) {
   const [doctors, setDoctors] = useState([]);
   const [userId,setUserId]=useState();
   const [allAppointments, setAllAppointments] = useState([]); 
+  const [email,setEmail]=useState("");
+  const [phone,setPhone]=useState("");
+  const [dob,setDOB]=useState("");
+  const [patientName,setpatientName]=useState("");
 
 const [uploading, setUploading] = useState(false);
 const [uploadProgress, setUploadProgress] = useState(null);
@@ -53,6 +57,15 @@ const handleRegister = async (e) => {
     alert("An error occurred while registering. Please try again.");
   }
 };
+const fetchPatientData = async (username) => {
+    const data = await apiService.getPatientData(username);
+    setEmail(data.email);
+    setPhone(data.phone);
+    setpatientName(data.name);
+    setDOB(data.date_of_birth);
+    setUserId(data.patient_id);
+    console.log(data);
+  };
 
 //login function
 const handleLogin = async (e) => {
@@ -62,7 +75,7 @@ const handleLogin = async (e) => {
     if (result.success) {
       setIsAuthenticated(true);
       setCurrentPage("dashboard");
-      setUserId(result.patient_id);
+      fetchPatientData(username);
       // Optionally store user info in state or context
     } else {
       alert(result.message || "Login failed");
@@ -80,6 +93,9 @@ const handleLogin = async (e) => {
   };
   fetchDoctors();
 }, []);
+
+
+
 
   const generateTimeSlots = () => {
     let slots = [];
@@ -321,6 +337,20 @@ const getAppointmentDateTime = (a) => {
   const timePart = a.time.split('T')[1].slice(0,5); 
   return new Date(`${dayPart}T${timePart}:00`);
 };
+const handleEmailChange = (e) => setEmail(e.target.value);
+const handlePhoneChange = (e) => setPhone(e.target.value);
+
+const handleUpdateProfile = async () => {
+
+  const result = await apiService.updatePatientData(userId, email, phone);
+
+  if (result.success) {
+    alert('Profile updated successfully!');
+  } else {
+    alert('Failed to update profile: ' + (result.error || 'Unknown error'));
+  }
+};
+
 
 const getFilteredAppointments = (type) => 
   { 
@@ -965,7 +995,7 @@ const getFilteredAppointments = (type) =>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
                     <input
                       type="text"
-                      value={username}
+                      value={patientName}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                       disabled
                     />
@@ -974,7 +1004,8 @@ const getFilteredAppointments = (type) =>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
                     <input
                       type="email"
-                      value={"patient@edoc.com"}
+                      value={email}
+                      onChange={handleEmailChange}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -982,7 +1013,8 @@ const getFilteredAppointments = (type) =>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
                     <input
                       type="tel"
-                      value="+1 (555) 123-4567"
+                      value={phone}
+                      onChange={handlePhoneChange}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -995,7 +1027,9 @@ const getFilteredAppointments = (type) =>
                     />
                   </div>
                 </div>
-                <button className="mt-6 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                <button 
+                onClick={handleUpdateProfile}
+                className="mt-6 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                   Update Profile
                 </button>
               </div>

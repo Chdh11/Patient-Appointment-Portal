@@ -8,12 +8,15 @@
     "test": "echo \"No tests yet...\""
   },
   "dependencies": {
+    "@azure/communication-email": "^1.0.0",
     "@azure/functions": "^4.7.2",
     "@azure/identity": "^4.11.1",
     "@azure/storage-blob": "^12.28.0",
     "bcryptjs": "^3.0.2",
+    "moment": "^2.30.1",
     "mssql": "^11.0.1",
     "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

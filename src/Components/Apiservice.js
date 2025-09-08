@@ -1,9 +1,9 @@
 // Replace your current Apiservice.js with this updated version
 import bcrypt from 'bcryptjs';
 
-const API_BASE_URL = 'https://appointment-function-app3-czccc8hgeyeuebbf.eastasia-01.azurewebsites.net/api';
+// const API_BASE_URL = 'https://appointment-function-app3-czccc8hgeyeuebbf.eastasia-01.azurewebsites.net/api';
 
-// const API_BASE_URL= ' http://localhost:7071/api'
+const API_BASE_URL= ' http://localhost:7071/api'
 const FUNCTION_APP_KEY=process.env.REACT_APP_FUNCTION_APP_KEY
 
 
@@ -70,6 +70,78 @@ const apiService = {
       return { success: false, message: "Failed to login. Please try again." };
     }
   },
+  //login patients with username and password
+  async loginDoctor(username, password) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/doctors`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-functions-key': FUNCTION_APP_KEY,
+        },
+      });
+
+      const result = await response.json();
+      console.log('API Response:', result);
+      
+      if (!result.success) {
+        return { success: false, message: "Failed to fetch users" };
+      }
+
+      const user = result.data.find(async (u) => {
+      if (u.username === username) {
+        return await bcrypt.compare(password, u.password_hash);
+      }});
+
+      if (user) {
+        return { success: true, userData: user };
+      } else {
+        return { success: false, message: "Invalid username or password" };
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      return { success: false, message: "Failed to login. Please try again." };
+    }
+  },
+
+ async getPatientData(username) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/patients?username=${encodeURIComponent(username)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-functions-key': FUNCTION_APP_KEY,
+      },
+    });
+
+    const result = await response.json();
+    console.log('Patient Data Response:', result);
+
+    return result.success && result.data.length > 0 ? result.data[0] : null;
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    return null;
+  }
+},
+ async getDoctortData(username) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/doctors?username=${encodeURIComponent(username)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-functions-key': FUNCTION_APP_KEY,
+      },
+    });
+
+    const result = await response.json();
+    console.log('Doctor Data Response:', result);
+
+    return result.success && result.data.length > 0 ? result.data[0] : null;
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    return null;
+  }
+},
   async getDoctors() {
   try {
     const response = await fetch(`${API_BASE_URL}/doctors`, {
@@ -268,48 +340,26 @@ async deleteMedicalRecordFile(fileName) {
   }
 },
 
-  // Get User Profile
-  async getUserProfile(userId, userType) {
-    try {
-      const endpoint = userType === 'patient' ? 'patients' : 'doctors';
-      const response = await fetch(`${API_BASE_URL}/${endpoint}?username=${encodeURIComponent(userId)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-functions-key': FUNCTION_APP_KEY,
-        },
-      });
+  async updatePatientData(patient_id, email, phone) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/patients`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-functions-key': FUNCTION_APP_KEY,
+      },
+      body: JSON.stringify({ patient_id, email, phone }),
+    });
 
-      const result = await response.json();
-      console.log('User Profile Response:', result);
-      return result.success ? result.data[0] : null;
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      return null;
-    }
-  },
+    const result = await response.json();
+    console.log('Update Response:', result);
+    return result;
+  } catch (error) {
+    console.error('Error updating patient data:', error);
+    return { success: false, error: error.message };
+  }
+}
 
-  // Update User Profile
-  async updateUserProfile(userId, userType, profileData) {
-    try {
-      const endpoint = userType === 'patient' ? 'patients' : 'doctors';
-      const response = await fetch(`${API_BASE_URL}/${endpoint}/${encodeURIComponent(userId)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-functions-key': FUNCTION_APP_KEY,
-        },
-        body: JSON.stringify(profileData),
-      });
-
-      const result = await response.json();
-      console.log('Update Profile Response:', result);
-      return result;
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      return { success: false, message: 'Failed to update profile.' };
-    }
-  },
 };
 
 export default apiService;

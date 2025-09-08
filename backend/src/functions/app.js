@@ -1,6 +1,8 @@
 const { app } = require('@azure/functions');
 const { executeQuery } = require('../db');
 const { storageHelpers, CONTAINERS, initializeContainers } = require('../storage');
+const { EmailClient } = require('@azure/communication-email');
+
 
 initializeContainers();
 
@@ -21,17 +23,32 @@ app.http('corsHandler', {
 
 // ==================== PATIENTS ====================
 app.http('patients', {
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT'],
     authLevel: 'anonymous',
     route: 'patients',
     handler: async (request, context) => {
         try {
             if (request.method === 'GET') {
-                const query = `
-                    SELECT patient_id, name, email, username, phone, date_of_birth, gender, created_at
-                    FROM Patients
-                `;
-                const result = await executeQuery(query);
+
+                const username = request.query.get('username');
+
+                let query;
+                let params = {};
+
+                if (username) {
+                    query = `
+                        SELECT patient_id, name, email, username, phone, date_of_birth, gender, created_at
+                        FROM Patients
+                        WHERE username = @username
+                    `;
+                    params = { username };
+                } else {
+                    query = `
+                        SELECT patient_id, name, email, username, phone, date_of_birth, gender, created_at
+                        FROM Patients
+                    `;
+                }
+                const result = await executeQuery(query,params);
                 return { status: 200, headers: corsHeaders ,  jsonBody: { success: true, data: result.recordset, count: result.recordset.length } };
             }
 
@@ -53,6 +70,39 @@ app.http('patients', {
 
                 return { status: 201, headers: corsHeaders, jsonBody: { success: true, message: "Patient created", data: result.recordset[0] } };
             }
+            if (request.method === 'PUT') {
+                const body = await request.json();
+                const { patient_id, name, email, username, phone, date_of_birth, gender } = body;
+
+                if (!patient_id) {
+                    return { status: 400, headers: corsHeaders, jsonBody: { success: false, error: "patient_id is required" } };
+                }
+
+                const query = `
+                    UPDATE Patients
+                    SET
+                        name = name,
+                        email = @email,
+                        username = username,
+                        phone = @phone,
+                        date_of_birth = date_of_birth,
+                        gender = gender
+                    WHERE patient_id = @patient_id;
+
+                    SELECT patient_id, name, email, username, phone, date_of_birth, gender, created_at
+                    FROM Patients
+                    WHERE patient_id = @patient_id;
+                `;
+                const params = { patient_id, name, email, username, phone, date_of_birth, gender };
+                const result = await executeQuery(query, params);
+
+                if (result.recordset.length === 0) {
+                    return { status: 404, headers: corsHeaders, jsonBody: { success: false, error: "Patient not found" } };
+                }
+
+                return { status: 200, headers: corsHeaders, jsonBody: { success: true, message: "Patient updated", data: result.recordset[0] } };
+            }
+
 
         } catch (error) {
             context.error(error);
@@ -63,17 +113,31 @@ app.http('patients', {
 
 // ==================== DOCTORS ====================
 app.http('doctors', {
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT'],
     authLevel: 'anonymous',
     route: 'doctors',
     handler: async (request, context) => {
         try {
             if (request.method === 'GET') {
-                const query = `
+                const username = request.query.get('username');
+
+                let query;
+                let params = {};
+
+                if (username) {
+                query = `
                     SELECT doctor_id, name, email, username, phone, specialization, license_number, created_at
                     FROM Doctors
+                    WHERE username = @username
                 `;
-                const result = await executeQuery(query);
+                params = { username };
+                } else {
+                    query = `
+                        SELECT doctor_id, name, email, username, phone, specialization, license_number, created_at
+                        FROM Doctors
+                    `;
+                }
+                const result = await executeQuery(query,params);
                 return { status: 200, headers: corsHeaders, jsonBody: { success: true, data: result.recordset, count: result.recordset.length } };
             }
 
@@ -94,6 +158,34 @@ app.http('doctors', {
                 const result = await executeQuery(query, params);
 
                 return { status: 201, headers: corsHeaders, jsonBody: { success: true, message: "Doctor created", data: result.recordset[0] } };
+            }
+            if (request.method === 'PUT') {
+                const body = await request.json();
+                const { patient_id, name, email, username, phone, date_of_birth, gender } = body;
+
+                if (!patient_id) {
+                    return { status: 400, headers: corsHeaders, jsonBody: { success: false, error: "patient_id is required" } };
+                }
+
+                const query = `
+                    UPDATE Doctors
+                    SET
+                        email = @email,
+                        
+                    WHERE doctor_id = @doctor_id;
+
+                    SELECT doctor_id, name, email, username, specialization, license_number, created_at
+                    FROM Doctors
+                    WHERE doctor_id = @doctor_id;
+                `;
+                const params = { doctor_id, email };
+                const result = await executeQuery(query, params);
+
+                if (result.recordset.length === 0) {
+                    return { status: 404, headers: corsHeaders, jsonBody: { success: false, error: "Doctor not found" } };
+                }
+
+                return { status: 200, headers: corsHeaders, jsonBody: { success: true, message: "Doctor updated", data: result.recordset[0] } };
             }
 
         } catch (error) {
@@ -611,6 +703,54 @@ app.http('deleteFile', {
                 status: 500,
                 headers: corsHeaders,
                 jsonBody: { success: false, error: error.message }
+            };
+        }
+    }
+});
+
+//==================Email notifications=============================
+app.http('testEmail', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    route: 'test/email',
+    handler: async (request, context) => {
+        try {
+            const emailClient = new EmailClient(process.env.AZURE_COMMUNICATION_CONNECTION_STRING);
+            
+            const emailMessage = {
+                senderAddress: process.env.SENDER_EMAIL,
+                content: {
+                    subject: "Test Email from Healthcare System",
+                    plainText: "This is a test email to verify Azure Communication Services setup.",
+                    html: "<h1>Test Email</h1><p>This is a test email to verify Azure Communication Services setup.</p>"
+                },
+                recipients: {
+                    to: [{ address: "chhavidhankhar07@gmail.com", displayName: "Chhavi" }]
+                }
+            };
+
+            const poller = await emailClient.beginSend(emailMessage);
+            const response = await poller.pollUntilDone();
+            
+            return {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+                jsonBody: {
+                    success: true,
+                    message: "Test email sent successfully",
+                    messageId: response.id
+                }
+            };
+
+        } catch (error) {
+            console.error('Email test failed:', error);
+            return {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+                jsonBody: {
+                    success: false,
+                    error: error.message
+                }
             };
         }
     }
